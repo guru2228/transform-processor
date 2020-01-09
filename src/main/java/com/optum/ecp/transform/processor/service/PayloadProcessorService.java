@@ -32,7 +32,7 @@ public class PayloadProcessorService {
         this.applicationConfig = applicationConfig;
     }
 
-    @KafkaListener(topics = "${app.config.input-topic}", containerFactory = "kafkaListenerContainerFactory")
+    @KafkaListener(topics = "${app.config.input-topic}")
     public void processPayload(ConsumerRecords<String, String> records, Acknowledgment ack) {
 
         Set<Map.Entry<String, Map<String, String>>> entries = applicationConfig.getQueries().entrySet();
