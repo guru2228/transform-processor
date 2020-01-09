@@ -1,0 +1,234 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: transform-processor
+parameters:
+  - description: Subject Area to be supported in the ingestion application. Possible values are mbr, hss or cpm
+    displayName: Group ID
+    name: SUBJECT_AREA
+    required: true
+    value: mbr
+  - description: Target Database to be supported in the ingestion application. Possible values are cockroach or yugabyte
+    displayName: Group ID
+    name: TARGET_DB
+    required: true
+    value: cockroach
+objects:
+  - apiVersion: route.openshift.io/v1
+    kind: Route
+    metadata:
+      labels:
+        expose: "true"
+        app: ${TARGET_DB}-${SUBJECT_AREA}-transform-processor
+        provider: fabric8
+        version: 0.0.1-SNAPSHOT
+        group: com.optum.c360
+      name: ${TARGET_DB}-${SUBJECT_AREA}-transform-processor
+    spec:
+      port:
+        targetPort: 8080
+      to:
+        kind: Service
+        name: ${TARGET_DB}-${SUBJECT_AREA}-transform-processor
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      annotations:
+        prometheus.io/path: /prometheus
+        prometheus.io/port: '8080'
+        prometheus.io/scheme: http
+        prometheus.io/scrape: 'true'
+      labels:
+        expose: "true"
+        app: ${TARGET_DB}-${SUBJECT_AREA}-transform-processor
+        provider: fabric8
+        version: 0.0.1-SNAPSHOT
+        group: com.optum.c360
+      name: ${TARGET_DB}-${SUBJECT_AREA}-transform-processor
+    spec:
+      ports:
+        - name: http
+          port: 8080
+          protocol: TCP
+          targetPort: 8080
+      selector:
+        app: ${TARGET_DB}-${SUBJECT_AREA}-transform-processor
+        provider: fabric8
+        group: com.optum.c360
+  - apiVersion: apps.openshift.io/v1
+    kind: DeploymentConfig
+    metadata:
+      labels:
+        app: ${TARGET_DB}-${SUBJECT_AREA}-transform-processor
+        provider: fabric8
+        version: 0.0.1-SNAPSHOT
+        group: com.optum.c360
+      name: ${TARGET_DB}-${SUBJECT_AREA}-transform-processor
+    spec:
+      replicas: 6
+      revisionHistoryLimit: 2
+      selector:
+        app: ${TARGET_DB}-${SUBJECT_AREA}-transform-processor
+        provider: fabric8
+        group: com.optum.c360
+      strategy:
+        activeDeadlineSeconds: 21600
+        rollingParams:
+          intervalSeconds: 1
+          maxSurge: 25%
+          maxUnavailable: 25%
+          timeoutSeconds: 3600
+          updatePeriodSeconds: 1
+        type: Rolling
+      template:
+        metadata:
+          labels:
+            app: ${TARGET_DB}-${SUBJECT_AREA}-transform-processor
+            provider: fabric8
+            version: 0.0.1-SNAPSHOT
+            group: com.optum.c360
+        spec:
+          containers:
+            - image: docker.optum.com/gsithura/transform-processor:dev
+              imagePullPolicy: Always
+              name: ${TARGET_DB}-${SUBJECT_AREA}-transform-processor
+              resources:
+                requests:
+                  memory: 6Gi
+                  cpu: 2
+                limits:
+                  memory: 6Gi
+                  cpu: 2
+              env:
+                - name: SPRING_PROFILES_ACTIVE
+                  value: default,${TARGET_DB}-${SUBJECT_AREA}
+                - name: JAVA_OPTIONS
+                  value: -Dspring.profiles.active=default,${TARGET_DB}-${SUBJECT_AREA}
+                - name: SPRING_KAFKA_CONCURRENCY
+                  valueFrom:
+                    configMapKeyRef:
+                      key: SPRING_KAFKA_CONCURRENCY
+                      name: ${TARGET_DB}-${SUBJECT_AREA}-config
+                - name: GROUP_ID
+                  valueFrom:
+                    configMapKeyRef:
+                      key: GROUP_ID
+                      name: ${TARGET_DB}-${SUBJECT_AREA}-config
+                - name: OFFSET_RESET
+                  valueFrom:
+                    configMapKeyRef:
+                      key: OFFSET_RESET
+                      name: ${TARGET_DB}-${SUBJECT_AREA}-config
+                - name: APP_POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+                - name: MY_POD_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: APP_ID
+                  valueFrom:
+                    configMapKeyRef:
+                      key: APP_ID
+                      name: ${TARGET_DB}-${SUBJECT_AREA}-config
+                - name: FROM_TOPIC
+                  valueFrom:
+                    configMapKeyRef:
+                      key: FROM_TOPIC
+                      name: ${TARGET_DB}-${SUBJECT_AREA}-config
+                - name: ORACLE_JDBC_URL
+                  valueFrom:
+                    configMapKeyRef:
+                      key: ORACLE_JDBC_URL
+                      name: sql-config
+                - name: ORACLE_USER_NAME
+                  valueFrom:
+                    configMapKeyRef:
+                      key: ORACLE_USER_NAME
+                      name: sql-config
+                - name: ORACLE_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: ORACLE_PASSWORD
+                      name: sql-secrets
+                - name: CRDB_JDBC_URL
+                  valueFrom:
+                    configMapKeyRef:
+                      key: CRDB_JDBC_URL
+                      name: sql-config
+                - name: CRDB_USER_NAME
+                  valueFrom:
+                    configMapKeyRef:
+                      key: CRDB_USER_NAME
+                      name: sql-config
+                - name: KAFKA_BOOTSTRAP_SERVERS
+                  valueFrom:
+                    configMapKeyRef:
+                      key: KAFKA_BOOTSTRAP_SERVERS
+                      name: ${TARGET_DB}-${SUBJECT_AREA}-config
+                - name: KAFKA_SSL_PROTOCOL
+                  value: SSL
+                - name: KAFKA_KEYSTORE_LOC
+                  value: /etc/ssl/kaas.ssl.keyStore
+                - name: KAFKA_KEYSTORE_LOCATION
+                  value: file:///etc/ssl/kaas.ssl.keyStore
+                - name: KAFKA_KEYSTORE_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: kaas.ssl.keyStorePassword
+                      name: kafka-secrets
+                - name: KAFKA_TRUSTSTORE_LOC
+                  value: /etc/ssl/kaas.ssl.trustStore
+                - name: KAFKA_TRUSTSTORE_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: kaas.ssl.trustStorePassword
+                      name: kafka-secrets
+                - name: KAFKA_TRUSTSTORE_LOCATION
+                  value: file:///etc/ssl/kaas.ssl.trustStore
+                - name: KAFKA_KEY_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: kaas.ssl.keyPassword
+                      name: kafka-secrets
+              ports:
+                - containerPort: 8080
+                  name: http
+                  protocol: TCP
+                - containerPort: 9779
+                  name: prometheus
+                  protocol: TCP
+                - containerPort: 8778
+                  name: jolokia
+                  protocol: TCP
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /etc/ssl
+                  name: ssl-keystore
+                  readOnly: true
+                - mountPath: /sql/ssl
+                  name: sql-keystore
+                  readOnly: true
+                - mountPath: /app/logs
+                  name: app-logs
+                  readOnly: false
+          dnsPolicy: ClusterFirst
+          restartPolicy: Always
+          schedulerName: default-scheduler
+          terminationGracePeriodSeconds: 30
+          volumes:
+            - name: ssl-keystore
+              secret:
+                defaultMode: 420
+                secretName: kafka-secrets
+            - name: sql-keystore
+              secret:
+                defaultMode: 420
+                secretName: sql-secrets
+            - name: app-logs
+              persistentVolumeClaim:
+                claimName: logs
+      triggers:
+        - type: ConfigChange

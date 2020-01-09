@@ -1,0 +1,69 @@
+<configuration>
+	<springProperty name="appName" source="spring.application.name" defaultValue="transform-processor" />
+	<timestamp key="timestamp-by-second" datePattern="yyyyMMdd'T'HHmmss"/>
+	<appender name="CONSOLE_APPENDER" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<charset>UTF-8</charset>
+			<Pattern>%d{dd-MM-yyyy HH:mm:ss.SSS} %magenta([%thread]) %highlight(%-5level) %logger{36}.%M - %msg%n</Pattern>
+		</encoder>
+	</appender>
+
+	<springProfile name="unit">
+
+		<logger name="com.optum" level="INFO" additivity="false">
+			<appender-ref ref="CONSOLE_APPENDER" />
+		</logger>
+
+		<root level="ERROR">
+			<appender-ref ref="CONSOLE_APPENDER" />
+		</root>
+	</springProfile>
+
+	<springProfile name="!unit">
+
+		<springProperty name="appName" source="spring.application.name" defaultValue="transform-processor" />
+		<springProperty name="podName" source="pod-name"/>
+
+		<appender name="FILE_APPENDER"
+				  class="ch.qos.logback.core.rolling.RollingFileAppender">
+			<file>${appName}-${podName}.log</file>
+			<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+				<Pattern>%d{dd-MM-yyyy HH:mm:ss.SSS} %magenta([%thread]) %highlight(%-5level) %logger{36}.%M - %msg%n</Pattern>
+			</encoder>
+
+			<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+				<!-- rollover daily -->
+				<fileNamePattern>${appName}-${podName}.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
+				<timeBasedFileNamingAndTriggeringPolicy
+						class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+					<maxFileSize>500MB</maxFileSize>
+				</timeBasedFileNamingAndTriggeringPolicy>
+				<maxHistory>14</maxHistory>
+				<totalSizeCap>300GB</totalSizeCap>
+			</rollingPolicy>
+
+		</appender>
+
+		<appender name="ASYNC_APPENDER" class="ch.qos.logback.classic.AsyncAppender">
+			<queueSize>1000</queueSize>
+			<discardingThreshold>0</discardingThreshold>
+			<appender-ref ref="FILE_APPENDER"/>
+		</appender>
+
+		<logger name="com.optum" level="INFO" additivity="false">
+			<appender-ref ref="ASYNC_APPENDER" />
+            <appender-ref ref="CONSOLE_APPENDER" />
+		</logger>
+
+		<logger name="org.springframework.jdbc.core.JdbcTemplate" level="DEBUG" >
+			<appender-ref ref="ASYNC_APPENDER" />
+			<appender-ref ref="CONSOLE_APPENDER" />
+		</logger>
+
+		<root level="INFO">
+			<appender-ref ref="ASYNC_APPENDER" />
+            <appender-ref ref="CONSOLE_APPENDER" />
+		</root>
+	</springProfile>
+
+</configuration>
